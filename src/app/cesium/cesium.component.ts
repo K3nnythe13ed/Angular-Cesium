@@ -12,6 +12,7 @@ import { ModalDirective } from 'ng2-bootstrap';
   styleUrls: ['./cesium.component.css']
 })
 export class CesiumComponent implements OnInit {
+  @ViewChild('dash') dash:ElementRef;
   @ViewChild('cesiumContainer') cesiumContainer: ElementRef;
   @ViewChild('modal') public childModal: ModalDirective;
   NgbModule
@@ -19,6 +20,7 @@ export class CesiumComponent implements OnInit {
 
   private _client: elasticsearch.Client
   pinBuilder: any;
+  render: Renderer;
   public showChildModal(): void {
 
   }
@@ -68,6 +70,8 @@ export class CesiumComponent implements OnInit {
 
       }
     });
+    this.render = this.renderer;
+
 
   }
   newMarkerOnMap(hit, viewer, pinBuilder) {
@@ -221,7 +225,9 @@ export class CesiumComponent implements OnInit {
 
   SelectArea() {
     let addToList = this.addToList;
+    let dash = this.dash;
     let client = this._client;
+    let render = this.render;
     var selector;
     let viewer = this.cesiumViewer
     var rectangleSelector = new Cesium.Rectangle();
@@ -235,9 +241,9 @@ export class CesiumComponent implements OnInit {
     var camera = viewer.camera;
     var coords = [];
 
-    viewerEventListener(addToList, client)
+    viewerEventListener(addToList, client, render, dash)
 
-    function viewerEventListener(addToList, client) {
+    function viewerEventListener(addToList, client, render, dash) {
       viewerEventRemoveListener()
 
 
@@ -284,9 +290,9 @@ export class CesiumComponent implements OnInit {
 
         coords.push([parseFloat(longitudeString), parseFloat(latitudeString)], [parseFloat(longitudeString2), parseFloat(latitudeString2)])
         //deleteDashboardWarehouseChild()
-        SelectAreaLocation(coords, addToList, client)
+        SelectAreaLocation(coords, addToList, client, viewer)
         //collapse()
-
+        render.invokeElementMethod(dash.nativeElement, 'click', []);
 
       }, Cesium.ScreenSpaceEventType.LEFT_UP, Cesium.KeyboardEventModifier.ALT);
 
@@ -307,8 +313,7 @@ export class CesiumComponent implements OnInit {
         },
         description: 'Area Selected'
       });
-
-
+   
     }
 
 
@@ -323,7 +328,7 @@ export class CesiumComponent implements OnInit {
 
     }
 
-    function SelectAreaLocation(c, addToList, client) {
+    function SelectAreaLocation(c, addToList, client, viewer) {
 
 
 
@@ -363,7 +368,7 @@ export class CesiumComponent implements OnInit {
       }, function getMoreUntilDone(error, response) {
 
         response.hits.hits.forEach(function (hit) {
-          addToList(hit, 'warehouse', false)
+          addToList(hit, "warehouse", false, viewer)
         })
         InsertWarehouseValue(response)
       })
