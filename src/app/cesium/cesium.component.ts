@@ -1,5 +1,7 @@
 import { Component, ElementRef, OnInit, Renderer, ViewChild } from '@angular/core';
 import * as elasticsearch from 'elasticsearch';
+import { ModalDirective } from 'ng2-bootstrap';
+
 /**
  * This is my cesium comment
  */
@@ -11,14 +13,19 @@ import * as elasticsearch from 'elasticsearch';
 })
 export class CesiumComponent implements OnInit {
   @ViewChild('cesiumContainer') cesiumContainer: ElementRef;
+  @ViewChild('modal') public childModal: ModalDirective;
+  NgbModule
   cesiumViewer: any;
+
   private _client: elasticsearch.Client
   pinBuilder: any;
+  public showChildModal(): void {
+
+  }
 
   constructor(public element: ElementRef, private renderer: Renderer) {
     Cesium.BingMapsApi.defaultKey = 'AroazdWsTmTcIx4ZE3SIicDXX00yEp9vuRZyn6pagjyjgS-VdRBfBNAVkvrucbqr';
     (<any>window).CESIUM_BASE_URL = '/assets/Cesium';
-
 
     this._client = new elasticsearch.Client({
       host: 'localhost:9200'
@@ -61,8 +68,7 @@ export class CesiumComponent implements OnInit {
 
       }
     });
-    console.log(this.cesiumViewer.entities)
-    console.log(viewer.entities)
+
   }
   newMarkerOnMap(hit, viewer, pinBuilder) {
 
@@ -152,12 +158,12 @@ export class CesiumComponent implements OnInit {
 
 
     function deleteLocation(id) {
-      this.client.delete({
+      this._client.delete({
         index: 'logstash-constant',
         type: 'warehouse',
         id: id
       }, function (error, response) {
-        this.client.indices.refresh({
+        this._client.indices.refresh({
           index: 'logstash-constant'
         }, function (err, results) {
 
@@ -176,6 +182,212 @@ export class CesiumComponent implements OnInit {
     function removeFromList(id) {
       var li = document.getElementById("li " + id);
       li.parentNode.removeChild(li);
+
+    }
+  }
+
+  showModal() {
+
+    let viewer = this.cesiumViewer
+
+    var screenSpaceEventHandler = new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
+    screenSpaceEventHandler.setInputAction(function parseLatLon(position) {
+
+      var mousePosition = new Cesium.Cartesian2(position.position.x, position.position.y);
+
+      var cartesian = viewer.camera.pickEllipsoid(mousePosition, viewer.scene.globe.ellipsoid);
+
+      var cartographic = viewer.scene.globe.ellipsoid.cartesianToCartographic(cartesian);
+      var longitudeString = Cesium.Math.toDegrees(cartographic.longitude).toFixed(2);
+      var latitudeString = Cesium.Math.toDegrees(cartographic.latitude).toFixed(2);
+      this.childModal.modal("show")
+
+      var lat = this.mod.find('#loclat');
+      var lon = this.mod.find('#loclon');
+
+      lat.val(parseFloat(latitudeString));
+      lon.val(parseFloat(longitudeString));
+
+
+      screenSpaceEventHandler.removeInputAction(Cesium.ScreenSpaceEventType.LEFT_CLICK, Cesium.KeyboardEventModifier.ALT)
+    }, Cesium.ScreenSpaceEventType.LEFT_CLICK, Cesium.KeyboardEventModifier.ALT);
+
+
+
+
+
+
+  }
+
+  SelectArea() {
+    let addToList = this.addToList;
+    let client = this._client;
+    var selector;
+    let viewer = this.cesiumViewer
+    var rectangleSelector = new Cesium.Rectangle();
+    var screenSpaceEventHandler = new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
+    var cartesian = new Cesium.Cartesian3();
+    var tempCartographic = new Cesium.Cartographic();
+    var center = new Cesium.Cartographic();
+    var firstPoint = new Cesium.Cartographic();
+    var firstPointSet = false;
+    var mouseDown = false;
+    var camera = viewer.camera;
+    var coords = [];
+
+    viewerEventListener(addToList, client)
+
+    function viewerEventListener(addToList, client) {
+      viewerEventRemoveListener()
+
+
+      //Draw the selector while the user drags the mouse while holding ALT
+      screenSpaceEventHandler.setInputAction(function drawSelector(movement) {
+        if (!mouseDown) {
+          return;
+        }
+
+        cartesian = camera.pickEllipsoid(movement.endPosition, viewer.scene.globe.ellipsoid, cartesian);
+
+        if (cartesian) {
+          //mouse cartographic
+          tempCartographic = Cesium.Cartographic.fromCartesian(cartesian, Cesium.Ellipsoid.WGS84, tempCartographic);
+
+          if (!firstPointSet) {
+            Cesium.Cartographic.clone(tempCartographic, firstPoint);
+            firstPointSet = true;
+          }
+          else {
+            rectangleSelector.east = Math.max(tempCartographic.longitude, firstPoint.longitude);
+            rectangleSelector.west = Math.min(tempCartographic.longitude, firstPoint.longitude);
+            rectangleSelector.north = Math.max(tempCartographic.latitude, firstPoint.latitude);
+            rectangleSelector.south = Math.min(tempCartographic.latitude, firstPoint.latitude);
+            selector.show = true;
+
+          }
+        }
+      }, Cesium.ScreenSpaceEventType.MOUSE_MOVE, Cesium.KeyboardEventModifier.ALT);
+
+      screenSpaceEventHandler.setInputAction(function startClickALT() {
+        mouseDown = true;
+        coords = []
+      }, Cesium.ScreenSpaceEventType.LEFT_DOWN, Cesium.KeyboardEventModifier.ALT);
+
+      screenSpaceEventHandler.setInputAction(function endClickALT() {
+        mouseDown = false;
+        firstPointSet = false;
+
+        var longitudeString2 = Cesium.Math.toDegrees(rectangleSelector.east).toFixed(2);
+        var latitudeString2 = Cesium.Math.toDegrees(rectangleSelector.north).toFixed(2);
+        var longitudeString = Cesium.Math.toDegrees(rectangleSelector.west).toFixed(2);
+        var latitudeString = Cesium.Math.toDegrees(rectangleSelector.south).toFixed(2);
+
+        coords.push([parseFloat(longitudeString), parseFloat(latitudeString)], [parseFloat(longitudeString2), parseFloat(latitudeString2)])
+        //deleteDashboardWarehouseChild()
+        SelectAreaLocation(coords, addToList, client)
+        //collapse()
+
+
+      }, Cesium.ScreenSpaceEventType.LEFT_UP, Cesium.KeyboardEventModifier.ALT);
+
+      var getSelectorLocation = new Cesium.CallbackProperty(function getSelectorLocation(time, result) {
+        return Cesium.Rectangle.clone(rectangleSelector, result);
+      }, false);
+
+
+      selector = viewer.entities.add({
+        id: 'rectangleAreaSelect',
+        name: 'Selected Area',
+        selectable: false,
+        show: false,
+        rectangle: {
+          coordinates: getSelectorLocation,
+          material: Cesium.Color.PURPLE.withAlpha(0.5),
+          height: 50
+        },
+        description: 'Area Selected'
+      });
+
+
+    }
+
+
+    function viewerEventRemoveListener() {
+      //deleteDashboardChild()
+      //deleteDashboardWarehouseChild()
+      viewer.entities.removeById('rectangleAreaSelect')
+      screenSpaceEventHandler.removeInputAction(Cesium.ScreenSpaceEventType.LEFT_UP, Cesium.KeyboardEventModifier.ALT)
+      screenSpaceEventHandler.removeInputAction(Cesium.ScreenSpaceEventType.LEFT_CLICK, Cesium.KeyboardEventModifier.ALT)
+      screenSpaceEventHandler.removeInputAction(Cesium.ScreenSpaceEventType.LEFT_DOWN, Cesium.KeyboardEventModifier.ALT)
+      screenSpaceEventHandler.removeInputAction(Cesium.ScreenSpaceEventType.MOUSE_MOVE, Cesium.KeyboardEventModifier.ALT)
+
+    }
+
+    function SelectAreaLocation(c, addToList, client) {
+
+
+
+      client.search({
+        index: 'logstash-constant',
+        type: 'warehouse',
+        body: {
+          "size": 1000,
+          "query": {
+            "bool": {
+              "must": [
+                {
+                  "geo_shape": {
+                    "geometry": {
+                      "shape": {
+                        "type": "envelope",
+                        "coordinates": [
+                          [c[0][0], c[0][1]], [c[1][0], c[1][1]]
+                        ]
+                      },
+                      "relation": "within"
+                    }
+                  }
+                }
+              ]
+
+            }
+          },
+          "aggs": {
+            "1": {
+              "sum": {
+                "field": "exposure"
+              }
+            }
+          }
+        }
+      }, function getMoreUntilDone(error, response) {
+
+        response.hits.hits.forEach(function (hit) {
+          addToList(hit, 'warehouse', false)
+        })
+        InsertWarehouseValue(response)
+      })
+
+    }
+    function InsertWarehouseValue(result) {
+      var node = document.createTextNode('Location Exp_TIV: ' + result.aggregations[1].value);
+
+
+      if (document.getElementById('WarehouseValue')) {
+        var li = document.getElementById('WarehouseValue')
+        li.removeChild(li.firstChild);
+      }
+      else {
+        var li = document.createElement("LI");
+        var att = document.createAttribute("id");
+        att.value = "WarehouseValue"
+
+        li.setAttributeNode(att);
+      }
+      li.appendChild(node);
+      var root = document.getElementById('dashboard');
+
+      root.insertBefore(li, root.childNodes[0])
 
     }
   }
