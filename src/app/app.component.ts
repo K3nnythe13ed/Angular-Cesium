@@ -16,7 +16,6 @@ export class AppComponent  implements OnInit {
   }
   
   ngOnInit() {
-    $('h1').text('Angular2-Cesium-Map');
 
   }
 }
