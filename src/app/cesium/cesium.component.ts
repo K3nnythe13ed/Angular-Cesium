@@ -15,7 +15,6 @@ export class CesiumComponent implements OnInit {
   @ViewChild('dash') dash:ElementRef;
   @ViewChild('cesiumContainer') cesiumContainer: ElementRef;
   @ViewChild('modal') public childModal: ModalDirective;
-  NgbModule
   cesiumViewer: any;
 
   private _client: elasticsearch.Client
@@ -37,13 +36,13 @@ export class CesiumComponent implements OnInit {
   ngAfterViewInit() {
 
 
-    var terrainProvider = new Cesium.CesiumTerrainProvider({
+    let terrainProvider = new Cesium.CesiumTerrainProvider({
       url: '//assets.agi.com/stk-terrain/world',
       requestWaterMask: true
     });
 
     this.cesiumViewer.terrainProvider = terrainProvider;
-    var viewer = this.cesiumViewer;
+    let viewer = this.cesiumViewer;
     let marker = this.newMarkerOnMap;
     let pinbuilder = this.pinBuilder;
     let addToList = this.addToList;
@@ -76,8 +75,8 @@ export class CesiumComponent implements OnInit {
   }
   newMarkerOnMap(hit, viewer, pinBuilder) {
 
-    var markerHeight = Math.max(Math.min(hit._source.properties.Exp_TIV / 200000, 100), 20);
-    var pointOfInterest = Cesium.Cartographic.fromDegrees(
+    let markerHeight = Math.max(Math.min(hit._source.properties.Exp_TIV / 200000, 100), 20);
+    let pointOfInterest = Cesium.Cartographic.fromDegrees(
       hit._source.geometry.coordinates[0], hit._source.geometry.coordinates[1]);
 
     Cesium.sampleTerrain(viewer.terrainProvider, 9, [pointOfInterest])
@@ -283,20 +282,21 @@ export class CesiumComponent implements OnInit {
         mouseDown = false;
         firstPointSet = false;
 
-        var longitudeString2 = Cesium.Math.toDegrees(rectangleSelector.east).toFixed(2);
-        var latitudeString2 = Cesium.Math.toDegrees(rectangleSelector.north).toFixed(2);
-        var longitudeString = Cesium.Math.toDegrees(rectangleSelector.west).toFixed(2);
-        var latitudeString = Cesium.Math.toDegrees(rectangleSelector.south).toFixed(2);
+        let longitudeString2 = Cesium.Math.toDegrees(rectangleSelector.east).toFixed(2);
+        let latitudeString2 = Cesium.Math.toDegrees(rectangleSelector.north).toFixed(2);
+        let longitudeString = Cesium.Math.toDegrees(rectangleSelector.west).toFixed(2);
+        let latitudeString = Cesium.Math.toDegrees(rectangleSelector.south).toFixed(2);
 
         coords.push([parseFloat(longitudeString), parseFloat(latitudeString)], [parseFloat(longitudeString2), parseFloat(latitudeString2)])
         //deleteDashboardWarehouseChild()
         SelectAreaLocation(coords, addToList, client, viewer)
         //collapse()
-        render.invokeElementMethod(dash.nativeElement, 'click', []);
+        // render.invokeElementMethod(dash.nativeElement, 'click', []);
+        // document.getElementById('dash').click(); works aswell
 
       }, Cesium.ScreenSpaceEventType.LEFT_UP, Cesium.KeyboardEventModifier.ALT);
 
-      var getSelectorLocation = new Cesium.CallbackProperty(function getSelectorLocation(time, result) {
+      let getSelectorLocation = new Cesium.CallbackProperty(function getSelectorLocation(time, result) {
         return Cesium.Rectangle.clone(rectangleSelector, result);
       }, false);
 
@@ -375,7 +375,7 @@ export class CesiumComponent implements OnInit {
 
     }
     function InsertWarehouseValue(result) {
-      var node = document.createTextNode('Location Exp_TIV: ' + result.aggregations[1].value);
+      let node = document.createTextNode('Location Exp_TIV: ' + result.aggregations[1].value);
 
 
       if (document.getElementById('WarehouseValue')) {
