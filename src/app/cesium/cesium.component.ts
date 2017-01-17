@@ -12,7 +12,7 @@ import { ModalDirective } from 'ng2-bootstrap';
   styleUrls: ['./cesium.component.css']
 })
 export class CesiumComponent implements OnInit {
-  @ViewChild('dash') dash:ElementRef;
+  @ViewChild('dash') dash: ElementRef;
   @ViewChild('cesiumContainer') cesiumContainer: ElementRef;
   @ViewChild('modal') public childModal: ModalDirective;
   cesiumViewer: any;
@@ -191,7 +191,7 @@ export class CesiumComponent implements OnInit {
 
   showModal() {
 
-    let viewer = this.cesiumViewer
+    let viewer = this.cesiumViewer;
 
     var screenSpaceEventHandler = new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
     screenSpaceEventHandler.setInputAction(function parseLatLon(position) {
@@ -203,15 +203,15 @@ export class CesiumComponent implements OnInit {
       var cartographic = viewer.scene.globe.ellipsoid.cartesianToCartographic(cartesian);
       var longitudeString = Cesium.Math.toDegrees(cartographic.longitude).toFixed(2);
       var latitudeString = Cesium.Math.toDegrees(cartographic.latitude).toFixed(2);
-      this.childModal.modal("show")
-
+      (<any>$("#MyModal")).modal('show')
+      /*
       var lat = this.mod.find('#loclat');
       var lon = this.mod.find('#loclon');
 
       lat.val(parseFloat(latitudeString));
       lon.val(parseFloat(longitudeString));
 
-
+*/
       screenSpaceEventHandler.removeInputAction(Cesium.ScreenSpaceEventType.LEFT_CLICK, Cesium.KeyboardEventModifier.ALT)
     }, Cesium.ScreenSpaceEventType.LEFT_CLICK, Cesium.KeyboardEventModifier.ALT);
 
@@ -228,7 +228,7 @@ export class CesiumComponent implements OnInit {
     let client = this._client;
     let render = this.render;
     var selector;
-    let viewer = this.cesiumViewer
+    let viewer = this.cesiumViewer;
     var rectangleSelector = new Cesium.Rectangle();
     var screenSpaceEventHandler = new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
     var cartesian = new Cesium.Cartesian3();
@@ -241,7 +241,6 @@ export class CesiumComponent implements OnInit {
     var coords = [];
 
     viewerEventListener(addToList, client, render, dash)
-
     function viewerEventListener(addToList, client, render, dash) {
       viewerEventRemoveListener()
 
@@ -313,14 +312,14 @@ export class CesiumComponent implements OnInit {
         },
         description: 'Area Selected'
       });
-   
+
     }
 
 
     function viewerEventRemoveListener() {
       //deleteDashboardChild()
       //deleteDashboardWarehouseChild()
-      viewer.entities.removeById('rectangleAreaSelect')
+      viewer.entities.removeById('rectangleAreaSelect');
       screenSpaceEventHandler.removeInputAction(Cesium.ScreenSpaceEventType.LEFT_UP, Cesium.KeyboardEventModifier.ALT)
       screenSpaceEventHandler.removeInputAction(Cesium.ScreenSpaceEventType.LEFT_CLICK, Cesium.KeyboardEventModifier.ALT)
       screenSpaceEventHandler.removeInputAction(Cesium.ScreenSpaceEventType.LEFT_DOWN, Cesium.KeyboardEventModifier.ALT)

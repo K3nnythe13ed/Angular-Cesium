@@ -5,6 +5,7 @@ import { HttpModule } from '@angular/http';
 import { AppComponent } from './app.component';
 import { CesiumComponent } from './cesium/cesium.component';
 import {NgbModule} from '@ng-bootstrap/ng-bootstrap';
+import { CesiumService } from './cesium/cesium.service';
 
 @NgModule({
   declarations: [
@@ -17,7 +18,7 @@ import {NgbModule} from '@ng-bootstrap/ng-bootstrap';
     HttpModule,
     NgbModule.forRoot()
   ],
-  providers: [],
+  providers: [CesiumService],
   bootstrap: [AppComponent]
 })
 export class AppModule { }
