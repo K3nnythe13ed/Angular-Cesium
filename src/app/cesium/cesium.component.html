@@ -21,9 +21,11 @@
                                 </ul>
                             </li>
                         </ul>
+                        <!--
                         <li data-toggle="collapse" data-target="#products" class="collapsed active">
                             <a href="#"><i class="fa fa-gift fa-lg"></i> UI Elements <span class="arrow"></span></a>
                         </li>
+                        
                         <ul class="sub-menu collapse" id="products">
                             <li class="active"><a href="#">CSS3 Animation</a></li>
                             <li><a href="#">General</a></li>
@@ -36,7 +38,7 @@
                             <li><a href="#">Widgets</a></li>
                             <li><a href="#">Bootstrap Model</a></li>
                         </ul>
-
+                        -->
 
                         <li #list data-toggle="collapse" data-target="#locationlist" class="collapsed">
                             <a href="#" onclick='return false;'><i class="fa fa-globe fa-lg"></i> Locations <span class="arrow"></span></a>
@@ -59,15 +61,16 @@
                         <ul class="sub-menu collapse" id="area">
                             <li (click)="SelectArea()">New Select</li>
 
-                            <li onclick='viewerEventRemoveListener(); return false;'>Cancel</li>
+                            <li (click)="viewerEventRemoveListener()">Cancel</li>
                         </ul>
 
 
                         <li>
-                            <a href="#">
-                                <i class="fa fa-users fa-lg"></i> Users
+                            <a href="#" onclick='return false' (click)="Toggle()">
+                                <i class="fa fa-users fa-lg"></i> Toggle Day/Night
                             </a>
                         </li>
+
                     </ul>
                 </div>
             </div>
@@ -141,7 +144,7 @@
 
                             </div>
 
-                            <button type="button" class="btn btn-primary" id="saveloc">Save</button>
+                            <button type="button" class="btn btn-primary" id="saveloc" (click)="SaveData()">Save</button>
                             <button type="button" class="btn btn-default" data-dismiss="modal">Close</button>
 
                         </form>

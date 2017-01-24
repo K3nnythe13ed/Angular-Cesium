@@ -164,3 +164,24 @@
     background-color: #4f5b69;
     overflow: hidden;
 }
+
+.modal {
+    background-color: black;
+}
+
+.modal-content {
+    background: #2e353d;
+    color: white;
+}
+
+#myModal .has-error .control-label,
+#myModal .has-error .help-block,
+#myModal .has-error .form-control-feedback {
+    color: #f39c12;
+}
+
+#myModal .has-success .control-label,
+#myModal .has-success .help-block,
+#myModal .has-success .form-control-feedback {
+    color: #18bc9c;
+}

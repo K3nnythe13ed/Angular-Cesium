@@ -11,3 +11,27 @@ export class ModelLocation{
     risk: number = 0;
     name: string = '*';
 }
+
+export class VesselList{
+    vessel: Vessel[] = [];
+}
+
+export class Vessel{
+    source: any;
+}
+
+export class CZMLObject{
+    id: number;
+    name: string;
+    description: string;
+    billboard: any;
+    position:{
+        interpolationAlgorithm: string;
+        interpolationDegree : number,
+        cartesian: any [];
+    }
+}
+
+export class CZMLArray{
+    czml: CZMLObject[] = [];
+}

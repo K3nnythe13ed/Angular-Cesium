@@ -1,1 +1,10 @@
 /* You can add global styles to this file, and also import other style files */
+
+html,
+body,
+#cesiumContainer {
+    background-color: #1a1a1a;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+}

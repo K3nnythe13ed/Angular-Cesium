@@ -1,6 +1,10 @@
 import { Component, ElementRef, OnInit, Renderer, ViewChild } from '@angular/core';
 import * as elasticsearch from 'elasticsearch';
 import { ModalDirective } from 'ng2-bootstrap';
+import { CObject } from './cesium.object';
+import { VesselService } from './vessel.service';
+import { Vessel, VesselList } from './cesium.model';
+
 
 /**
  * This is my cesium comment
@@ -14,17 +18,15 @@ import { ModalDirective } from 'ng2-bootstrap';
 export class CesiumComponent implements OnInit {
   @ViewChild('dash') dash: ElementRef;
   @ViewChild('cesiumContainer') cesiumContainer: ElementRef;
-  @ViewChild('modal') public childModal: ModalDirective;
   cesiumViewer: any;
 
   private _client: elasticsearch.Client
   pinBuilder: any;
   render: Renderer;
-  public showChildModal(): void {
+  CesiumObject: CObject;
 
-  }
 
-  constructor(public element: ElementRef, private renderer: Renderer) {
+  constructor(public element: ElementRef, private renderer: Renderer, private VesselService: VesselService) {
     Cesium.BingMapsApi.defaultKey = 'AroazdWsTmTcIx4ZE3SIicDXX00yEp9vuRZyn6pagjyjgS-VdRBfBNAVkvrucbqr';
     (<any>window).CESIUM_BASE_URL = '/assets/Cesium';
 
@@ -40,12 +42,18 @@ export class CesiumComponent implements OnInit {
       url: '//assets.agi.com/stk-terrain/world',
       requestWaterMask: true
     });
-
+    let CesiumObject = new CObject();
+    CesiumObject.viewer = this.cesiumViewer;
+    CesiumObject.client = this._client;
+    CesiumObject.render = this.render;
+    CesiumObject.pinBuilder = this.pinBuilder;
+    this.CesiumObject = CesiumObject;
     this.cesiumViewer.terrainProvider = terrainProvider;
-    let viewer = this.cesiumViewer;
+    
     let marker = this.newMarkerOnMap;
-    let pinbuilder = this.pinBuilder;
     let addToList = this.addToList;
+    this.VesselService.LoadVessels();
+
     this._client.search({
       index: 'logstash-*',
       type: 'warehouse',
@@ -62,8 +70,8 @@ export class CesiumComponent implements OnInit {
       } else {
 
         response.hits.hits.forEach((hit) => {
-          marker(hit, viewer, pinbuilder);
-          addToList(hit, "locationlist", true, viewer)
+          marker(hit, CesiumObject);
+          addToList(hit, "locationlist", true, CesiumObject)
         })
         console.log('All is well');
 
@@ -73,20 +81,20 @@ export class CesiumComponent implements OnInit {
 
 
   }
-  newMarkerOnMap(hit, viewer, pinBuilder) {
+  newMarkerOnMap(hit, CesiumObject) {
 
     let markerHeight = Math.max(Math.min(hit._source.properties.Exp_TIV / 200000, 100), 20);
     let pointOfInterest = Cesium.Cartographic.fromDegrees(
       hit._source.geometry.coordinates[0], hit._source.geometry.coordinates[1]);
 
-    Cesium.sampleTerrain(viewer.terrainProvider, 9, [pointOfInterest])
+    Cesium.sampleTerrain(CesiumObject.viewer.terrainProvider, 9, [pointOfInterest])
       .then(function (samples) {
-        viewer.entities.add({
+        CesiumObject.viewer.entities.add({
           id: hit._source.properties.LocID,
           name: hit._source.properties.AccountName,
           position: Cesium.Cartesian3.fromDegrees(hit._source.geometry.coordinates[0], hit._source.geometry.coordinates[1], samples[0].height),
           billboard: {
-            image: pinBuilder.fromText('' + hit._source.properties.LocID, Cesium.Color.ROYALBLUE, markerHeight).toDataURL(),
+            image: CesiumObject.pinBuilder.fromText('' + hit._source.properties.LocID, Cesium.Color.ROYALBLUE, markerHeight).toDataURL(),
             verticalOrigin: Cesium.VerticalOrigin.BOTTOM
           },
           description: '\
@@ -112,7 +120,7 @@ export class CesiumComponent implements OnInit {
 
   }
 
-  addToList(hit, element, del, viewer) {
+  addToList(hit, element, del, CesiumObject) {
 
     var locationlist = document.getElementById(element);
     var li = document.createElement("LI");
@@ -127,7 +135,7 @@ export class CesiumComponent implements OnInit {
     a.title = "Location: " + hit._source.properties.AccountName;
     a.href = "#";
     a.onclick = function () {
-      viewer.flyTo(viewer.entities.getById(hit._source.properties.LocID),
+      CesiumObject.viewer.flyTo(CesiumObject.viewer.entities.getById(hit._source.properties.LocID),
         {
           orientation: {
             heading: Cesium.Math.toRadians(175.0),
@@ -150,7 +158,7 @@ export class CesiumComponent implements OnInit {
       btn.appendChild(t);
 
       btn.onclick = function () {
-        deleteLocation(hit._source.properties.LocID)
+        deleteLocation(hit._source.properties.LocID, CesiumObject.client)
       }
 
 
@@ -160,17 +168,17 @@ export class CesiumComponent implements OnInit {
     locationlist.appendChild(li)
 
 
-    function deleteLocation(id) {
-      this._client.delete({
+    function deleteLocation(id, client) {
+      client.delete({
         index: 'logstash-constant',
         type: 'warehouse',
         id: id
       }, function (error, response) {
-        this._client.indices.refresh({
+        client.indices.refresh({
           index: 'logstash-constant'
         }, function (err, results) {
 
-          //removePinMarker(id)
+          removePinMarker(id)
           removeFromList(id)
         }
 
@@ -180,7 +188,7 @@ export class CesiumComponent implements OnInit {
 
     function removePinMarker(id) {
 
-      viewer.entities.remove(viewer.entities.getById(id))
+      CesiumObject.viewer.entities.remove(CesiumObject.viewer.entities.getById(id))
     }
     function removeFromList(id) {
       var li = document.getElementById("li " + id);
@@ -190,216 +198,275 @@ export class CesiumComponent implements OnInit {
   }
 
   showModal() {
+    let viewer = this.CesiumObject.viewer;
 
-    let viewer = this.cesiumViewer;
-
-    var screenSpaceEventHandler = new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
+    let screenSpaceEventHandler = new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
     screenSpaceEventHandler.setInputAction(function parseLatLon(position) {
 
-      var mousePosition = new Cesium.Cartesian2(position.position.x, position.position.y);
+      let mousePosition = new Cesium.Cartesian2(position.position.x, position.position.y);
 
-      var cartesian = viewer.camera.pickEllipsoid(mousePosition, viewer.scene.globe.ellipsoid);
+      let cartesian = viewer.camera.pickEllipsoid(mousePosition, viewer.scene.globe.ellipsoid);
 
-      var cartographic = viewer.scene.globe.ellipsoid.cartesianToCartographic(cartesian);
-      var longitudeString = Cesium.Math.toDegrees(cartographic.longitude).toFixed(2);
-      var latitudeString = Cesium.Math.toDegrees(cartographic.latitude).toFixed(2);
-      (<any>$("#MyModal")).modal('show')
-      /*
-      var lat = this.mod.find('#loclat');
-      var lon = this.mod.find('#loclon');
+      let cartographic = viewer.scene.globe.ellipsoid.cartesianToCartographic(cartesian);
+      let longitudeString = Cesium.Math.toDegrees(cartographic.longitude).toFixed(8);
+      let latitudeString = Cesium.Math.toDegrees(cartographic.latitude).toFixed(8);
+
+      let mod = (<any>$('#MyModal'));
+      mod.modal('show');
+
+      let lat = mod.find('#loclat');
+      let lon = mod.find('#loclon');
 
       lat.val(parseFloat(latitudeString));
       lon.val(parseFloat(longitudeString));
 
-*/
+
       screenSpaceEventHandler.removeInputAction(Cesium.ScreenSpaceEventType.LEFT_CLICK, Cesium.KeyboardEventModifier.ALT)
     }, Cesium.ScreenSpaceEventType.LEFT_CLICK, Cesium.KeyboardEventModifier.ALT);
 
+  }
+  SaveData() {
+    let CesiumObject = this.CesiumObject;
+    let addToList = this.addToList;
+    let newMarkerOnMap = this.newMarkerOnMap
+    let mod = (<any>$('#MyModal'));
+    let lat = mod.find('#loclat')["0"].value;
+    let lon = mod.find('#loclon')["0"].value;
+    let name = mod.find('#locname')["0"].value;
+    let id = mod.find('#locid')["0"].value;
+    let risc = mod.find('#locrisc')["0"].value;
+    let exp = mod.find('#locexp')["0"].value;
+    let oe = mod.find('#locoe')["0"].value;
+    let today = new Date();
+    let hit = {
+        "@timestamp": today,
+        "exposure": exp,
+        "geometry": {
+          "coordinates": [
+            lon,
+            lat
+          ],
+          "type": "Point"
+        },
+        "id": id,
+        "properties": {
+          "AAL_PreCat_EQ": "",
+          "AAL_PreCat_WS": "",
+          "ML_AGCS_Share": "",
+          "Entire": ", " + oe + ",  0,  0,  0",
+          "Exp_TIV": exp,
+          "OE": oe,
+          "MR_RISK_SCORE": risc,
+          "LocID": id,
+          "AAL_PreCat_FL": "",
+          "AddrMatch": "",
+          "AccountName": name
+        }
+      }
+    CesiumObject.client.index({
+      index: 'logstash-constant',
+      type: 'warehouse',
+      id: id,
+      body: hit
+    }, function (err, results) {
+      CesiumObject.client.indices.refresh({
+        index: 'logstash-constant'
+      }, function (err, res) {
+        CesiumObject.client.get({
+                index: 'logstash-constant',
+                type: 'warehouse',
+                id: id
+            }, function (err, response) {
+                newMarkerOnMap(response, CesiumObject);
+                addToList(response, 'locationlist', true, CesiumObject);
+            })
+        
+      })
+    
+    });
+    (<any>$('#MyModal')).modal('hide');
+  }
+
+SelectArea() {
+  let addToList = this.addToList;
+  let dash = this.dash;
+  let CesiumObject = this.CesiumObject;
+  let selector;
+  let rectangleSelector = new Cesium.Rectangle();
+  let screenSpaceEventHandler = new Cesium.ScreenSpaceEventHandler(CesiumObject.viewer.scene.canvas);
+  let cartesian = new Cesium.Cartesian3();
+  let tempCartographic = new Cesium.Cartographic();
+  let center = new Cesium.Cartographic();
+  let firstPoint = new Cesium.Cartographic();
+  let firstPointSet = false;
+  let mouseDown = false;
+  let camera = CesiumObject.viewer.camera;
+  let coords = [];
+
+  viewerEventListener(addToList, CesiumObject, dash)
+  function viewerEventListener(addToList, CesiumObject, dash) {
+    viewerEventRemoveListener();
+
+    screenSpaceEventHandler.setInputAction(function drawSelector(movement) {
+      if (!mouseDown) {
+        return;
+      }
+
+      cartesian = camera.pickEllipsoid(movement.endPosition, CesiumObject.viewer.scene.globe.ellipsoid, cartesian);
+
+      if (cartesian) {
+        tempCartographic = Cesium.Cartographic.fromCartesian(cartesian, Cesium.Ellipsoid.WGS84, tempCartographic);
+
+        if (!firstPointSet) {
+          Cesium.Cartographic.clone(tempCartographic, firstPoint);
+          firstPointSet = true;
+        }
+        // tslint:disable-next-line:one-line
+        else{
+          rectangleSelector.east = Math.max(tempCartographic.longitude, firstPoint.longitude);
+          rectangleSelector.west = Math.min(tempCartographic.longitude, firstPoint.longitude);
+          rectangleSelector.north = Math.max(tempCartographic.latitude, firstPoint.latitude);
+          rectangleSelector.south = Math.min(tempCartographic.latitude, firstPoint.latitude);
+          selector.show = true;
+
+        }
+      }
+    }, Cesium.ScreenSpaceEventType.MOUSE_MOVE, Cesium.KeyboardEventModifier.ALT);
+
+    screenSpaceEventHandler.setInputAction(function startClickALT() {
+      mouseDown = true;
+      coords = []
+    }, Cesium.ScreenSpaceEventType.LEFT_DOWN, Cesium.KeyboardEventModifier.ALT);
+
+    screenSpaceEventHandler.setInputAction(function endClickALT() {
+      mouseDown = false;
+      firstPointSet = false;
+
+      let longitudeString2 = Cesium.Math.toDegrees(rectangleSelector.east).toFixed(2);
+      let latitudeString2 = Cesium.Math.toDegrees(rectangleSelector.north).toFixed(2);
+      let longitudeString = Cesium.Math.toDegrees(rectangleSelector.west).toFixed(2);
+      let latitudeString = Cesium.Math.toDegrees(rectangleSelector.south).toFixed(2);
+
+      coords.push([parseFloat(longitudeString), parseFloat(latitudeString)], [parseFloat(longitudeString2), parseFloat(latitudeString2)])
+      //deleteDashboardWarehouseChild()
+      SelectAreaLocation(coords, addToList, CesiumObject)
+      //collapse()
+      // render.invokeElementMethod(dash.nativeElement, 'click', []);
+      // document.getElementById('dash').click(); works aswell
+
+    }, Cesium.ScreenSpaceEventType.LEFT_UP, Cesium.KeyboardEventModifier.ALT);
+
+    let getSelectorLocation = new Cesium.CallbackProperty(function getSelectorLocation(time, result) {
+      return Cesium.Rectangle.clone(rectangleSelector, result);
+    }, false);
 
 
-
-
+    selector = CesiumObject.viewer.entities.add({
+      id: 'rectangleAreaSelect',
+      name: 'Selected Area',
+      selectable: false,
+      show: false,
+      rectangle: {
+        coordinates: getSelectorLocation,
+        material: Cesium.Color.PURPLE.withAlpha(0.5),
+        height: 50
+      },
+      description: 'Area Selected'
+    });
 
   }
 
-  SelectArea() {
-    let addToList = this.addToList;
-    let dash = this.dash;
-    let client = this._client;
-    let render = this.render;
-    var selector;
-    let viewer = this.cesiumViewer;
-    var rectangleSelector = new Cesium.Rectangle();
-    var screenSpaceEventHandler = new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
-    var cartesian = new Cesium.Cartesian3();
-    var tempCartographic = new Cesium.Cartographic();
-    var center = new Cesium.Cartographic();
-    var firstPoint = new Cesium.Cartographic();
-    var firstPointSet = false;
-    var mouseDown = false;
-    var camera = viewer.camera;
-    var coords = [];
 
-    viewerEventListener(addToList, client, render, dash)
-    function viewerEventListener(addToList, client, render, dash) {
-      viewerEventRemoveListener()
+  function viewerEventRemoveListener() {
+    //deleteDashboardChild()
+    //deleteDashboardWarehouseChild()
+    CesiumObject.viewer.entities.removeById('rectangleAreaSelect');
+    screenSpaceEventHandler.removeInputAction(Cesium.ScreenSpaceEventType.LEFT_UP, Cesium.KeyboardEventModifier.ALT)
+    screenSpaceEventHandler.removeInputAction(Cesium.ScreenSpaceEventType.LEFT_CLICK, Cesium.KeyboardEventModifier.ALT)
+    screenSpaceEventHandler.removeInputAction(Cesium.ScreenSpaceEventType.LEFT_DOWN, Cesium.KeyboardEventModifier.ALT)
+    screenSpaceEventHandler.removeInputAction(Cesium.ScreenSpaceEventType.MOUSE_MOVE, Cesium.KeyboardEventModifier.ALT)
 
+  }
 
-      //Draw the selector while the user drags the mouse while holding ALT
-      screenSpaceEventHandler.setInputAction(function drawSelector(movement) {
-        if (!mouseDown) {
-          return;
-        }
-
-        cartesian = camera.pickEllipsoid(movement.endPosition, viewer.scene.globe.ellipsoid, cartesian);
-
-        if (cartesian) {
-          //mouse cartographic
-          tempCartographic = Cesium.Cartographic.fromCartesian(cartesian, Cesium.Ellipsoid.WGS84, tempCartographic);
-
-          if (!firstPointSet) {
-            Cesium.Cartographic.clone(tempCartographic, firstPoint);
-            firstPointSet = true;
-          }
-          else {
-            rectangleSelector.east = Math.max(tempCartographic.longitude, firstPoint.longitude);
-            rectangleSelector.west = Math.min(tempCartographic.longitude, firstPoint.longitude);
-            rectangleSelector.north = Math.max(tempCartographic.latitude, firstPoint.latitude);
-            rectangleSelector.south = Math.min(tempCartographic.latitude, firstPoint.latitude);
-            selector.show = true;
-
-          }
-        }
-      }, Cesium.ScreenSpaceEventType.MOUSE_MOVE, Cesium.KeyboardEventModifier.ALT);
-
-      screenSpaceEventHandler.setInputAction(function startClickALT() {
-        mouseDown = true;
-        coords = []
-      }, Cesium.ScreenSpaceEventType.LEFT_DOWN, Cesium.KeyboardEventModifier.ALT);
-
-      screenSpaceEventHandler.setInputAction(function endClickALT() {
-        mouseDown = false;
-        firstPointSet = false;
-
-        let longitudeString2 = Cesium.Math.toDegrees(rectangleSelector.east).toFixed(2);
-        let latitudeString2 = Cesium.Math.toDegrees(rectangleSelector.north).toFixed(2);
-        let longitudeString = Cesium.Math.toDegrees(rectangleSelector.west).toFixed(2);
-        let latitudeString = Cesium.Math.toDegrees(rectangleSelector.south).toFixed(2);
-
-        coords.push([parseFloat(longitudeString), parseFloat(latitudeString)], [parseFloat(longitudeString2), parseFloat(latitudeString2)])
-        //deleteDashboardWarehouseChild()
-        SelectAreaLocation(coords, addToList, client, viewer)
-        //collapse()
-        // render.invokeElementMethod(dash.nativeElement, 'click', []);
-        // document.getElementById('dash').click(); works aswell
-
-      }, Cesium.ScreenSpaceEventType.LEFT_UP, Cesium.KeyboardEventModifier.ALT);
-
-      let getSelectorLocation = new Cesium.CallbackProperty(function getSelectorLocation(time, result) {
-        return Cesium.Rectangle.clone(rectangleSelector, result);
-      }, false);
-
-
-      selector = viewer.entities.add({
-        id: 'rectangleAreaSelect',
-        name: 'Selected Area',
-        selectable: false,
-        show: false,
-        rectangle: {
-          coordinates: getSelectorLocation,
-          material: Cesium.Color.PURPLE.withAlpha(0.5),
-          height: 50
-        },
-        description: 'Area Selected'
-      });
-
-    }
-
-
-    function viewerEventRemoveListener() {
-      //deleteDashboardChild()
-      //deleteDashboardWarehouseChild()
-      viewer.entities.removeById('rectangleAreaSelect');
-      screenSpaceEventHandler.removeInputAction(Cesium.ScreenSpaceEventType.LEFT_UP, Cesium.KeyboardEventModifier.ALT)
-      screenSpaceEventHandler.removeInputAction(Cesium.ScreenSpaceEventType.LEFT_CLICK, Cesium.KeyboardEventModifier.ALT)
-      screenSpaceEventHandler.removeInputAction(Cesium.ScreenSpaceEventType.LEFT_DOWN, Cesium.KeyboardEventModifier.ALT)
-      screenSpaceEventHandler.removeInputAction(Cesium.ScreenSpaceEventType.MOUSE_MOVE, Cesium.KeyboardEventModifier.ALT)
-
-    }
-
-    function SelectAreaLocation(c, addToList, client, viewer) {
+  function SelectAreaLocation(c, addToList, CesiumObject) {
 
 
 
-      client.search({
-        index: 'logstash-constant',
-        type: 'warehouse',
-        body: {
-          "size": 1000,
-          "query": {
-            "bool": {
-              "must": [
-                {
-                  "geo_shape": {
-                    "geometry": {
-                      "shape": {
-                        "type": "envelope",
-                        "coordinates": [
-                          [c[0][0], c[0][1]], [c[1][0], c[1][1]]
-                        ]
-                      },
-                      "relation": "within"
-                    }
+    CesiumObject.client.search({
+      index: 'logstash-constant',
+      type: 'warehouse',
+      body: {
+        "size": 1000,
+        "query": {
+          "bool": {
+            "must": [
+              {
+                "geo_shape": {
+                  "geometry": {
+                    "shape": {
+                      "type": "envelope",
+                      "coordinates": [
+                        [c[0][0], c[0][1]], [c[1][0], c[1][1]]
+                      ]
+                    },
+                    "relation": "within"
                   }
                 }
-              ]
-
-            }
-          },
-          "aggs": {
-            "1": {
-              "sum": {
-                "field": "exposure"
               }
+            ]
+
+          }
+        },
+        "aggs": {
+          "1": {
+            "sum": {
+              "field": "exposure"
             }
           }
         }
-      }, function getMoreUntilDone(error, response) {
-
-        response.hits.hits.forEach(function (hit) {
-          addToList(hit, "warehouse", false, viewer)
-        })
-        InsertWarehouseValue(response)
-      })
-
-    }
-    function InsertWarehouseValue(result) {
-      let node = document.createTextNode('Location Exp_TIV: ' + result.aggregations[1].value);
-
-
-      if (document.getElementById('WarehouseValue')) {
-        var li = document.getElementById('WarehouseValue')
-        li.removeChild(li.firstChild);
       }
-      else {
-        var li = document.createElement("LI");
-        var att = document.createAttribute("id");
-        att.value = "WarehouseValue"
+    }, function getMoreUntilDone(error, response) {
 
-        li.setAttributeNode(att);
-      }
-      li.appendChild(node);
-      var root = document.getElementById('dashboard');
+      response.hits.hits.forEach(function (hit) {
+        addToList(hit, 'warehouse', false, CesiumObject)
+      });
+      InsertWarehouseValue(response)
+    });
 
-      root.insertBefore(li, root.childNodes[0])
+  }
+  function InsertWarehouseValue(result) {
+    let node = document.createTextNode('Location Exp_TIV: ' + result.aggregations[1].value);
 
+
+    if (document.getElementById('WarehouseValue')) {
+      var li = document.getElementById('WarehouseValue')
+      li.removeChild(li.firstChild);
     }
+    else {
+      var li = document.createElement("LI");
+      var att = document.createAttribute("id");
+      att.value = "WarehouseValue"
+
+      li.setAttributeNode(att);
+    }
+    li.appendChild(node);
+    var root = document.getElementById('dashboard');
+
+    root.insertBefore(li, root.childNodes[0])
+
   }
-  ngOnInit() {
-    this.pinBuilder = new Cesium.PinBuilder();
-    this.cesiumViewer = new Cesium.Viewer(this.cesiumContainer.nativeElement);
-    this.cesiumViewer.scene.globe.enableLighting = true;
-  }
+
+  
+}
+Toggle()
+{
+  this.CesiumObject.viewer.scene.globe.enableLighting = !(this.cesiumViewer.scene.globe.enableLighting)
+}
+ngOnInit() {
+  this.pinBuilder = new Cesium.PinBuilder();
+  this.cesiumViewer = new Cesium.Viewer(this.cesiumContainer.nativeElement);
+  this.cesiumViewer.scene.globe.enableLighting = true;
+}
 
 
 
